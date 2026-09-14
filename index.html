@@ -519,6 +519,12 @@
           <label class="block text-sm text-ink mb-1" for="prof-name">Name and relationship</label>
           <input type="text" id="prof-name" required placeholder="e.g. Leo Davis (Son)" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
         </div>
+
+        <div>
+          <label class="block text-sm text-ink mb-1" for="prof-dob">Date of birth</label>
+          <input type="date" id="prof-dob" required class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none text-muted">
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-ink mb-1" for="prof-blood">Blood type</label>
@@ -980,7 +986,6 @@ function openERModal() {
   document.getElementById('modal-er-contact').innerText = p.emergencyContact.name;
   document.getElementById('modal-er-phone').href = `tel:${p.emergencyContact.phone.replace(/[^\d+]/g,'')}`;
 
-  // Make modal visible first so the QR container has actual dimensions in the DOM
   openModal('modal-er');
 
   const holder = document.getElementById('er-qr-holder');
@@ -1028,23 +1033,38 @@ document.addEventListener('keydown', (e) => {
 function handleAddProfile(e) {
   e.preventDefault();
   const name = document.getElementById('prof-name').value;
+  const rawDob = document.getElementById('prof-dob').value;
   const blood = document.getElementById('prof-blood').value;
   const allergies = document.getElementById('prof-allergies').value.split(',').map(s => s.trim()).filter(Boolean);
   const contactName = document.getElementById('prof-contact-name').value;
   const contactPhone = document.getElementById('prof-contact-phone').value;
+
+  let formattedDob = 'Not set';
+  let age = '—';
+  if (rawDob) {
+    const birthDate = new Date(rawDob);
+    const today = new Date();
+    let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      calculatedAge--;
+    }
+    age = calculatedAge >= 0 ? calculatedAge : 0;
+    formattedDob = birthDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
 
   const newId = 'p-' + Date.now();
   appState.profiles.push({
     id: newId, 
     name, 
     relationLabel: '', 
-    dob: 'Not set', 
-    age: '—',
+    dob: formattedDob, 
+    age: age,
     bloodType: blood, 
     allergies, 
     conditions: [], 
     activeMeds: 'None recorded',
-    codeStatus: 'Not set', 
+    codeStatus: 'Full code — resuscitate', 
     mpoa: 'Not set',
     emergencyContact: { 
       name: contactName, 
