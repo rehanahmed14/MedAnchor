@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedAnchor — Your family's medical history, in one place</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink: '#E8EFEA',
+          muted: '#8D9F96',
+          bg: '#0C100E',
+          surface: '#151C18',
+          border: '#223028',
+          brand: { DEFAULT: '#10B981', dark: '#059669', soft: '#064E3B' },
+          urgent: { DEFAULT: '#EF4444', soft: '#451010' },
+          amber: { DEFAULT: '#F59E0B', soft: '#452A0A' }
+        },
+        fontFamily: {
+          serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+          sans: ['Inter', 'system-ui', 'sans-serif']
+        }
+      }
+    }
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+  body { background: #0C100E; color: #E8EFEA; font-family: 'Inter', sans-serif; position: relative; }
+  h1, h2, h3, .serif { font-family: 'Source Serif 4', Georgia, serif; }
+
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid #10B981;
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #223028; border-radius: 4px; }
+
+  .tab-btn[aria-selected="true"] {
+    color: #10B981;
+    border-color: #10B981;
+    font-weight: 600;
+  }
+
+  #bg-canvas {
+    position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0;
+    pointer-events: none; opacity: 0.35;
+  }
+  .bg-glow {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  }
+  .bg-glow span {
+    position: absolute; border-radius: 999px; filter: blur(90px);
+    animation: drift 26s ease-in-out infinite;
+  }
+  .bg-glow span:nth-child(1) { width: 480px; height: 480px; left: -10%; top: -12%; background: rgba(16,185,129,0.1); animation-delay: 0s; }
+  .bg-glow span:nth-child(2) { width: 420px; height: 420px; right: -8%; top: 20%; background: rgba(245,158,11,0.06); animation-delay: -8s; }
+  .bg-glow span:nth-child(3) { width: 520px; height: 520px; left: 20%; bottom: -18%; background: rgba(16,185,129,0.08); animation-delay: -16s; }
+  @keyframes drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(4%, 6%) scale(1.08); }
+    66% { transform: translate(-3%, -4%) scale(0.96); }
+  }
+
+  #app-root { position: relative; z-index: 10; }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.in-view { opacity: 1; transform: translateY(0); }
+
+  .card-hover { transition: transform 0.25s ease, border-color 0.25s ease; }
+  .card-hover:hover { transform: translateY(-2px); border-color: #354a3f; }
+
+  .breathe { animation: breathe 3.4s ease-in-out infinite; }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+    #bg-canvas, .bg-glow { display: none !important; }
+  }
+  html.motion-off #bg-canvas, html.motion-off .bg-glow {
+    display: none !important;
+  }
+  html.motion-off .reveal { opacity: 1 !important; transform: none !important; }
+  html.motion-off .breathe { animation: none !important; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #handoff-print, #handoff-print * { visibility: visible; }
+    #handoff-print { position: absolute; top: 0; left: 0; width: 100%; padding: 0; background: #fff !important; color: #000 !important; }
+    .no-print { display: none !important; }
+  }
+
+  #particle-hero {
+    width: 100%;
+    height: 320px;
+    background: transparent;
+    position: relative;
+    z-index: 10;
+    overflow: hidden;
+  }
+  #particle-hero canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+  <div class="bg-glow" aria-hidden="true"><span></span><span></span><span></span></div>
+
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:bg-brand focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">Skip to content</a>
+
+  <div id="particle-hero" class="no-print" aria-hidden="true">
+    <canvas id="particle-hero-canvas"></canvas>
+  </div>
+
+  <div id="app-root" class="flex flex-col min-h-screen w-full">
+
+  <!-- HEADER -->
+  <header class="no-print sticky top-0 z-30 bg-surface/90 backdrop-blur border-b border-border">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-lg bg-brand flex items-center justify-center shrink-0">
+          <i data-lucide="heart-pulse" class="w-5 h-5 text-bg"></i>
+        </div>
+        <span class="font-semibold text-lg text-ink">MedAnchor</span>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button id="motion-toggle" onclick="toggleMotion()" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-border hover:border-brand text-xs text-muted transition-colors" aria-pressed="true">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span id="motion-toggle-label">Motion on</span>
+        </button>
+
+        <!-- Profile switcher -->
+        <div class="relative">
+          <button id="profile-btn" onclick="toggleProfileMenu()" aria-haspopup="true" aria-expanded="false" class="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border border-border hover:border-brand transition-colors bg-surface">
+            <div class="w-7 h-7 rounded-full bg-brand-soft text-brand flex items-center justify-center text-xs font-semibold" id="active-avatar">ED</div>
+            <span id="active-profile-name" class="text-sm font-medium text-ink hidden sm:inline">Eleanor Davis</span>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-muted"></i>
+          </button>
+          <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-72 bg-surface rounded-2xl border border-border shadow-2xl p-2 z-40">
+            <div class="text-xs font-medium text-muted px-3 py-2">People you manage</div>
+            <div id="profile-list" class="space-y-0.5"></div>
+            <div class="border-t border-border mt-1 pt-1">
+              <button onclick="openModal('modal-profile')" class="w-full text-left px-3 py-2.5 text-sm text-brand hover:bg-brand-soft/50 rounded-xl flex items-center gap-2 font-medium">
+                <i data-lucide="user-plus" class="w-4 h-4"></i> Add a family member
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button onclick="openERModal()" class="breathe px-3.5 py-2 rounded-full bg-urgent hover:bg-urgent/90 text-white text-sm font-semibold flex items-center gap-2 shadow-sm">
+          <i data-lucide="cross" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Emergency card</span>
+          <span class="sm:hidden">Emergency</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="max-w-5xl mx-auto px-4 sm:px-6" aria-label="Sections">
+      <div class="flex items-center gap-6 overflow-x-auto -mb-px">
+        <button onclick="switchTab('overview')" id="nav-overview" role="tab" aria-selected="true" class="tab-btn shrink-0 py-3 text-sm text-muted border-b-2 border-transparent hover:text-ink transition-colors">Overview</button>
+        <button onclick="switchTab('documents')" id="nav-documents" role="tab" aria-selected="false" class="tab-btn shrink-0 py-3 text-sm text-muted border-b-2 border-transparent hover:text-ink transition-colors">Documents</button>
+        <button onclick="switchTab('circle')" id="nav-circle" role="tab" aria-selected="false" class="tab-btn shrink-0 py-3 text-sm text-muted border-b-2 border-transparent hover:text-ink transition-colors">Care circle</button>
+        <button onclick="switchTab('handoff')" id="nav-handoff" role="tab" aria-selected="false" class="tab-btn shrink-0 py-3 text-sm text-muted border-b-2 border-transparent hover:text-ink transition-colors">Clinic handoff</button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- MAIN -->
+  <main id="main-content" class="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full">
+
+    <!-- OVERVIEW -->
+    <section id="view-overview" class="tab-view space-y-6">
+
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-semibold text-ink" id="dash-patient-name">Eleanor Davis</h1>
+        <p class="text-sm text-muted mt-1" id="dash-patient-sub">Born 14 May 1968 · 58 years old</p>
+      </div>
+
+      <div class="bg-urgent-soft/40 border border-urgent/30 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold text-ink">Seriously unwell right now?</h2>
+          <p class="text-sm text-muted mt-0.5">If it's life-threatening, call your local emergency number first. Otherwise, this calls the listed contact straight away.</p>
+        </div>
+        <a id="sos-call-btn" href="tel:+15550192831" class="shrink-0 px-5 py-3.5 rounded-2xl bg-urgent hover:bg-urgent/90 text-white text-base font-semibold flex items-center justify-center gap-2 shadow-sm">
+          <i data-lucide="phone-call" class="w-5 h-5"></i>
+          <span id="sos-call-label">Call Mark Davis now</span>
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="reveal card-hover bg-surface rounded-2xl border border-border p-4">
+          <span class="text-xs text-muted">Blood type</span>
+          <div class="text-xl font-semibold text-ink mt-0.5" id="dash-blood-type">O positive</div>
+        </div>
+        <div class="reveal card-hover bg-amber-soft/30 rounded-2xl border border-amber/30 p-4" style="transition-delay:0.06s">
+          <span class="text-xs text-amber font-medium">Allergies</span>
+          <div class="flex flex-wrap gap-1.5 mt-1.5" id="dash-allergies"></div>
+        </div>
+        <div class="reveal card-hover bg-brand-soft/30 rounded-2xl border border-brand/30 p-4" style="transition-delay:0.12s">
+          <span class="text-xs text-brand font-medium">Ongoing conditions</span>
+          <div class="flex flex-wrap gap-1.5 mt-1.5" id="dash-conditions"></div>
+        </div>
+        <div class="reveal card-hover bg-surface rounded-2xl border border-border p-4" style="transition-delay:0.18s">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-muted">Emergency contact</span>
+            <button onclick="openEditContactModal()" class="text-xs text-brand hover:underline font-medium">Edit</button>
+          </div>
+          <div class="text-sm font-semibold text-ink mt-1" id="dash-contact-name">Mark Davis (Son)</div>
+          <a id="dash-contact-phone" href="tel:+15550192831" class="text-sm text-brand hover:underline">+1 (555) 019-2831</a>
+        </div>
+      </div>
+
+      <div class="reveal card-hover bg-surface rounded-2xl border border-border p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-semibold text-ink flex items-center gap-2">
+            <i data-lucide="pill" class="w-4 h-4 text-brand"></i> Current medications
+          </h2>
+          <button onclick="switchTab('documents')" class="text-sm text-brand hover:underline">View prescriptions</button>
+        </div>
+        <p class="text-sm text-muted leading-relaxed" id="dash-active-meds">Metformin 500mg, twice daily · Lisinopril 10mg, once daily in the morning · Aspirin 81mg, once daily</p>
+      </div>
+
+      <div class="reveal card-hover bg-surface rounded-2xl border border-border p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-semibold text-ink flex items-center gap-2">
+            <i data-lucide="file-signature" class="w-4 h-4 text-brand"></i> Care directives
+          </h2>
+          <button onclick="openModal('modal-dnr-edit')" class="text-sm text-brand hover:underline">Edit</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <div>
+            <span class="text-xs text-muted block">Resuscitation status</span>
+            <p class="font-medium text-ink" id="legal-code-status">Full code — resuscitate</p>
+          </div>
+          <div>
+            <span class="text-xs text-muted block">Medical power of attorney</span>
+            <p class="font-medium text-ink" id="legal-mpoa-name">Mark Davis (Son)</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- DOCUMENTS -->
+    <section id="view-documents" class="tab-view space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-semibold text-ink">Documents</h1>
+          <p class="text-sm text-muted mt-0.5">Prescriptions, lab results, and scans kept in one place.</p>
+        </div>
+        <button onclick="openModal('modal-upload')" class="px-4 py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl flex items-center gap-2 shrink-0">
+          <i data-lucide="upload" class="w-4 h-4"></i> Add a document
+        </button>
+      </div>
+
+      <div id="documents-list" class="space-y-2"></div>
+
+      <p class="text-xs text-muted bg-surface border border-border rounded-xl p-3 flex items-start gap-2">
+        <i data-lucide="info" class="w-3.5 h-3.5 mt-0.5 shrink-0"></i>
+        Documents are saved per profile in your browser storage. Private documents require a 4-digit PIN to open.
+      </p>
+    </section>
+
+    <!-- CARE CIRCLE -->
+    <section id="view-circle" class="tab-view space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-semibold text-ink">Care circle</h1>
+          <p class="text-sm text-muted mt-0.5">Family, designated caregivers, and healthcare providers.</p>
+        </div>
+        <button onclick="openModal('modal-add-caregiver')" class="px-4 py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl flex items-center gap-2 shrink-0">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> Add someone
+        </button>
+      </div>
+
+      <div id="caregivers-list" class="space-y-2"></div>
+
+      <div class="bg-surface rounded-2xl border border-border p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-semibold text-ink flex items-center gap-2">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-brand"></i> Today's medications
+          </h2>
+          <span class="text-xs text-brand bg-brand-soft px-2.5 py-1 rounded-full border border-brand/20">Both taken</span>
+        </div>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between items-center py-2 border-b border-border">
+            <span class="text-ink">Metformin 500mg — morning dose</span>
+            <span class="text-muted">Taken at 8:30am</span>
+          </div>
+          <div class="flex justify-between items-center py-2">
+            <span class="text-ink">Lisinopril 10mg — morning dose</span>
+            <span class="text-muted">Taken at 8:30am</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLINIC HANDOFF -->
+    <section id="view-handoff" class="tab-view space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
+        <div>
+          <h1 class="text-xl font-semibold text-ink">Clinic handoff</h1>
+          <p class="text-sm text-muted mt-0.5">A condensed clinical overview intended for rapid intake.</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="exportFhirJson()" class="px-3.5 py-2.5 bg-surface hover:bg-border text-ink text-sm font-medium rounded-xl border border-border flex items-center gap-2">
+            <i data-lucide="download" class="w-4 h-4"></i> Export FHIR JSON
+          </button>
+          <button onclick="window.print()" class="px-3.5 py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl flex items-center gap-2">
+            <i data-lucide="printer" class="w-4 h-4"></i> Print
+          </button>
+        </div>
+      </div>
+
+      <div id="handoff-print" class="bg-surface rounded-2xl border border-border p-6 sm:p-8 space-y-6">
+        <div class="flex items-baseline justify-between border-b border-border pb-4">
+          <div>
+            <h2 class="text-xl font-semibold text-ink" id="handoff-name">Eleanor Davis</h2>
+            <p class="text-sm text-muted" id="handoff-sub">Born 14 May 1968</p>
+          </div>
+          <span class="text-xs text-muted">Prepared <span id="handoff-date"></span></span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <h3 class="text-sm font-semibold text-ink mb-2">Problem list</h3>
+            <ul class="text-sm text-muted space-y-1 list-disc pl-4" id="handoff-problems">
+              <li>Type 2 diabetes — most recent HbA1c 6.8%</li>
+              <li>Essential hypertension — controlled on lisinopril</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-ink mb-2">Current medications</h3>
+            <p class="text-sm text-muted" id="handoff-meds">Metformin 500mg twice daily · Lisinopril 10mg once daily · Aspirin 81mg once daily</p>
+            <p class="text-xs text-muted/70 mt-2">Metformin increased from 250mg in August 2025 after a rise in blood sugar.</p>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-ink mb-2">Allergies</h3>
+            <p class="text-sm text-muted" id="handoff-allergies">Penicillin (anaphylaxis), peanuts</p>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-ink mb-2">Recent labs</h3>
+            <p class="text-sm text-muted">HbA1c: 7.4% (Jul 2024) → 7.1% (Nov 2024) → 6.8% (Jan 2026)</p>
+          </div>
+        </div>
+
+        <div class="border-t border-border pt-4 text-sm text-muted">
+          Emergency contact: <span class="text-ink font-medium" id="handoff-contact">Mark Davis (Son), +1 (555) 019-2831</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="no-print border-t border-border py-6 text-center text-xs text-muted">
+    MedAnchor — a prototype. Not a substitute for carrying primary documentation or discussing care with a licensed physician.
+  </footer>
+
+  </div>
+
+  <!-- MODAL: EMERGENCY CARD -->
+  <div id="modal-er" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-md p-6 sm:p-7 space-y-5 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-er')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="text-center space-y-1 pt-1">
+        <div class="inline-flex items-center gap-1.5 text-urgent text-xs font-semibold bg-urgent-soft px-2.5 py-1 rounded-full border border-urgent/30">
+          <i data-lucide="cross" class="w-3.5 h-3.5"></i> For emergency responders
+        </div>
+        <h2 class="text-xl font-semibold text-ink pt-1" id="modal-er-name">Eleanor Davis</h2>
+      </div>
+
+      <div class="flex justify-center py-1">
+        <div class="p-3 bg-white rounded-2xl border border-border flex items-center justify-center min-w-[176px] min-h-[176px]" id="er-qr-holder"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <div class="p-3 bg-bg rounded-xl border border-border">
+          <span class="text-xs text-muted block">Blood type</span>
+          <span class="font-semibold text-ink" id="modal-er-blood">O positive</span>
+        </div>
+        <div class="p-3 bg-amber-soft/40 border border-amber/30 rounded-xl">
+          <span class="text-xs text-amber block">Allergies</span>
+          <span class="font-semibold text-ink text-sm" id="modal-er-allergy">Penicillin (anaphylaxis)</span>
+        </div>
+      </div>
+
+      <div class="p-3 bg-bg border border-border rounded-xl flex items-center justify-between">
+        <div>
+          <span class="text-xs text-muted block">Emergency contact</span>
+          <span class="font-semibold text-ink" id="modal-er-contact">Mark Davis (Son)</span>
+        </div>
+        <a id="modal-er-phone" href="tel:+15550192831" class="px-3.5 py-2 bg-urgent text-white text-sm font-medium rounded-lg flex items-center gap-1.5">
+          <i data-lucide="phone" class="w-4 h-4"></i> Call
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: UPLOAD DOCUMENT -->
+  <div id="modal-upload" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-md p-6 space-y-4 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-upload')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h2 class="text-lg font-semibold text-ink">Add a document</h2>
+      <form onsubmit="handleUpload(event)" class="space-y-3.5" id="upload-form-el">
+        <div>
+          <label class="block text-sm text-ink mb-1" for="doc-file">File</label>
+          <label for="doc-file" id="doc-file-label" class="flex items-center gap-2.5 w-full px-3.5 py-3 bg-bg border border-dashed border-border rounded-xl text-sm text-muted cursor-pointer hover:border-brand transition-colors">
+            <i data-lucide="paperclip" class="w-4 h-4 shrink-0"></i>
+            <span id="doc-file-label-text">Choose a photo or PDF of the document</span>
+          </label>
+          <input type="file" id="doc-file" accept="image/*,application/pdf" class="hidden" onchange="handleFileChosen(event)">
+          <p id="doc-file-error" class="hidden text-xs text-urgent mt-1"></p>
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="doc-title">Title</label>
+          <input type="text" id="doc-title" required placeholder="e.g. Comprehensive Metabolic Panel" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-ink mb-1" for="doc-category">Category</label>
+            <select id="doc-category" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+              <option>Prescription</option>
+              <option>Lab report</option>
+              <option>Imaging / scan</option>
+              <option>Discharge summary</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-ink mb-1" for="doc-doctor">Doctor</label>
+            <input type="text" id="doc-doctor" required placeholder="Dr. Sarah Jenkins" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+          </div>
+        </div>
+
+        <!-- Privacy lock option -->
+        <div class="p-3 bg-bg border border-border rounded-xl space-y-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="doc-private" class="rounded accent-emerald-500 w-4 h-4" onchange="togglePinInput(this.checked)">
+            <span class="text-sm text-ink font-medium">Keep this document private</span>
+          </label>
+          <div id="pin-field-wrapper" class="hidden pt-1">
+            <label class="block text-xs text-muted mb-1" for="doc-pin">Set a 4-digit PIN to lock it</label>
+            <input type="password" id="doc-pin" maxlength="4" placeholder="e.g. 1234" class="w-full px-3 py-1.5 bg-surface border border-border rounded-lg text-sm text-ink focus:border-brand outline-none">
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Save document</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: UNLOCK PRIVATE DOCUMENT -->
+  <div id="modal-unlock-doc" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-xs p-6 space-y-4 relative shadow-2xl border border-border text-center">
+      <div class="w-12 h-12 rounded-full bg-amber-soft border border-amber/30 text-amber flex items-center justify-center mx-auto">
+        <i data-lucide="lock" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h3 class="text-base font-semibold text-ink">Locked Document</h3>
+        <p class="text-xs text-muted mt-0.5">Enter PIN to view this private file</p>
+      </div>
+      <form onsubmit="verifyDocUnlock(event)" class="space-y-3">
+        <input type="password" id="unlock-pin-input" maxlength="4" required autofocus class="w-full text-center tracking-widest text-lg px-3 py-2 bg-bg border border-border rounded-xl text-ink focus:border-brand outline-none">
+        <p id="unlock-error" class="text-xs text-urgent hidden">Incorrect PIN</p>
+        <div class="flex gap-2">
+          <button type="button" onclick="closeModal('modal-unlock-doc')" class="w-1/2 py-2 bg-surface hover:bg-border text-ink text-sm rounded-xl">Cancel</button>
+          <button type="submit" class="w-1/2 py-2 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Unlock</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VIEW DOCUMENT -->
+  <div id="modal-view-doc" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-2xl max-h-[85vh] p-5 sm:p-6 space-y-3 relative shadow-2xl flex flex-col border border-border">
+      <div class="flex items-center justify-between shrink-0">
+        <h2 class="text-base font-semibold text-ink truncate pr-8" id="view-doc-title">Document</h2>
+        <button onclick="closeModal('modal-view-doc')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="view-doc-body" class="flex-1 overflow-auto rounded-xl bg-bg border border-border flex items-center justify-center min-h-[300px]"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD FAMILY MEMBER -->
+  <div id="modal-profile" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-md p-6 space-y-4 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-profile')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h2 class="text-lg font-semibold text-ink">Add a family member</h2>
+      <form onsubmit="handleAddProfile(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-sm text-ink mb-1" for="prof-name">Name and relationship</label>
+          <input type="text" id="prof-name" required placeholder="e.g. Leo Davis (Son)" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-ink mb-1" for="prof-blood">Blood type</label>
+            <input type="text" id="prof-blood" required placeholder="A positive" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+          </div>
+          <div>
+            <label class="block text-sm text-ink mb-1" for="prof-allergies">Allergies</label>
+            <input type="text" id="prof-allergies" placeholder="Penicillin, peanuts" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-border">
+          <label class="block text-sm font-medium text-ink mb-2">Emergency Contact</label>
+          <div class="space-y-2.5">
+            <input type="text" id="prof-contact-name" required placeholder="Contact name & relation (e.g. Sarah Davis)" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+            <input type="tel" id="prof-contact-phone" required placeholder="Phone number (e.g. +1 555-0199)" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Add family member</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT EMERGENCY CONTACT -->
+  <div id="modal-contact-edit" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-md p-6 space-y-4 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-contact-edit')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h2 class="text-lg font-semibold text-ink">Edit emergency contact</h2>
+      <form onsubmit="handleEditContact(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-contact-name">Contact Name & Relation</label>
+          <input type="text" id="edit-contact-name" required class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-contact-phone">Phone Number</label>
+          <input type="tel" id="edit-contact-phone" required class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Save Contact</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD CAREGIVER -->
+  <div id="modal-add-caregiver" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-md p-6 space-y-4 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-add-caregiver')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h2 class="text-lg font-semibold text-ink">Add to the care circle</h2>
+      <form onsubmit="handleAddCaregiver(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-sm text-ink mb-1" for="cg-name">Name</label>
+          <input type="text" id="cg-name" required placeholder="Dr. Robert Chen" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="cg-relation">Relationship or role</label>
+          <input type="text" id="cg-relation" required placeholder="Cardiologist" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="cg-role">Access level</label>
+          <select id="cg-role" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+            <option value="Full access">Full access — can view and edit everything</option>
+            <option value="Medical view only">Medical records — view only</option>
+            <option value="Emergency only">Emergency info only</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Add to care circle</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT DIRECTIVES -->
+  <div id="modal-dnr-edit" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-md p-6 space-y-4 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-dnr-edit')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h2 class="text-lg font-semibold text-ink">Edit care directives</h2>
+      <form onsubmit="handleEditDirectives(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-code-status">Resuscitation status</label>
+          <select id="edit-code-status" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+            <option>Full code — resuscitate</option>
+            <option>Do not resuscitate (DNR)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-mpoa">Medical power of attorney</label>
+          <input type="text" id="edit-mpoa" required class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Save directives</button>
+      </form>
+    </div>
+  </div>
+
+<script>
+const INITIAL_APP_STATE = {
+  activeProfileId: 'p1',
+  profiles: [
+    {
+      id: 'p1', name: 'Eleanor Davis', relationLabel: '', dob: '14 May 1968', age: 58,
+      bloodType: 'O positive', allergies: ['Penicillin (anaphylaxis)', 'Peanuts'],
+      conditions: ['Type 2 diabetes', 'Hypertension'],
+      activeMeds: 'Metformin 500mg, twice daily · Lisinopril 10mg, once daily in the morning · Aspirin 81mg, once daily',
+      codeStatus: 'Full code — resuscitate', mpoa: 'Mark Davis (Son)',
+      emergencyContact: { name: 'Mark Davis (Son)', phone: '+1 (555) 019-2831' }
+    },
+    {
+      id: 'p2', name: 'Arthur Davis', relationLabel: '(Father)', dob: '3 Feb 1941', age: 85,
+      bloodType: 'A positive', allergies: ['Sulfa antibiotics'],
+      conditions: ['Congestive heart failure', 'Pacemaker'],
+      activeMeds: 'Furosemide 40mg, once daily · Carvedilol 12.5mg, twice daily',
+      codeStatus: 'Do not resuscitate (DNR)', mpoa: 'Eleanor Davis (Daughter)',
+      emergencyContact: { name: 'Eleanor Davis (Daughter)', phone: '+1 (555) 012-4411' }
+    }
+  ],
+  caregivers: [
+    { id: 'c1', name: 'Mark Davis', relation: 'Son · Primary contact', role: 'Full access', avatar: 'MD' },
+    { id: 'c2', name: 'Dr. Aris Thorne', relation: 'Cardiologist', role: 'Medical view only', avatar: 'AT' },
+    { id: 'c3', name: 'Clara Davis', relation: 'Daughter', role: 'Emergency info only', avatar: 'CD' }
+  ],
+  documents: [
+    { id: 'doc-1', profileId: 'p1', title: 'Comprehensive Metabolic Panel', category: 'Lab report', doctor: 'Dr. Sarah Jenkins', date: '2026-01-12', isPrivate: false, pin: null },
+    { id: 'doc-2', profileId: 'p1', title: 'Metformin prescription', category: 'Prescription', doctor: 'Dr. Michael Chang', date: '2025-08-19', isPrivate: false, pin: null }
+  ]
+};
+
+let appState;
+try {
+  appState = JSON.parse(localStorage.getItem('MEDANCHOR_STATE')) || INITIAL_APP_STATE;
+} catch (e) {
+  appState = INITIAL_APP_STATE;
+}
+function saveState() { try { localStorage.setItem('MEDANCHOR_STATE', JSON.stringify(appState)); } catch (e) { console.warn('Could not save:', e); } }
+function currentProfile() { return appState.profiles.find(p => p.id === appState.activeProfileId) || appState.profiles[0]; }
+
+function safeIcons() { try { lucide.createIcons(); } catch (e) { console.warn('Icon render skipped:', e); } }
+safeIcons();
+
+const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let motionOn = !prefersReduced && localStorage.getItem('MEDANCHOR_MOTION') !== 'off';
+
+function applyMotionState() {
+  document.documentElement.classList.toggle('motion-off', !motionOn);
+  const label = document.getElementById('motion-toggle-label');
+  const btn = document.getElementById('motion-toggle');
+  if (label) label.innerText = motionOn ? 'Motion on' : 'Motion off';
+  if (btn) btn.setAttribute('aria-pressed', String(motionOn));
+}
+function toggleMotion() {
+  motionOn = !motionOn;
+  localStorage.setItem('MEDANCHOR_MOTION', motionOn ? 'on' : 'off');
+  applyMotionState();
+}
+applyMotionState();
+
+function initBackground3D() {
+  try {
+    const canvas = document.getElementById('bg-canvas');
+    if (!canvas || typeof THREE === 'undefined') return;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.z = 9;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const geo = new THREE.IcosahedronGeometry(3.2, 1);
+    const wire = new THREE.WireframeGeometry(geo);
+    const mat = new THREE.LineBasicMaterial({ color: 0x10B981, transparent: true, opacity: 0.25 });
+    const shape = new THREE.LineSegments(wire, mat);
+    scene.add(shape);
+
+    const dotsGeo = new THREE.BufferGeometry();
+    const count = 90;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count * 3; i += 3) {
+      positions[i] = (Math.random() - 0.5) * 22;
+      positions[i+1] = (Math.random() - 0.5) * 14;
+      positions[i+2] = (Math.random() - 0.5) * 10 - 4;
+    }
+    dotsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const dotsMat = new THREE.PointsMaterial({ color: 0xF59E0B, size: 0.045, transparent: true, opacity: 0.3 });
+    const dots = new THREE.Points(dotsGeo, dotsMat);
+    scene.add(dots);
+
+    let targetX = 0, targetY = 0;
+    window.addEventListener('mousemove', (e) => {
+      targetX = (e.clientX / window.innerWidth - 0.5) * 0.4;
+      targetY = (e.clientY / window.innerHeight - 0.5) * 0.4;
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (!motionOn) return;
+      try {
+        shape.rotation.y += 0.0018 + targetX * 0.002;
+        shape.rotation.x += 0.0007 + targetY * 0.002;
+        dots.rotation.y -= 0.0006;
+        renderer.render(scene, camera);
+      } catch (e) {}
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      try {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      } catch (e) {}
+    });
+  } catch (e) {
+    console.warn('3D background disabled:', e);
+  }
+}
+
+function observeReveals() {
+  try {
+    if (!('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal:not(.in-view)').forEach(el => io.observe(el));
+  } catch (e) { console.warn('Scroll reveal skipped:', e); }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-view').forEach(v => v.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.setAttribute('aria-selected', 'false'));
+  document.getElementById(`view-${tabId}`)?.classList.remove('hidden');
+  document.getElementById(`nav-${tabId}`)?.setAttribute('aria-selected', 'true');
+  observeReveals();
+}
+
+function toggleProfileMenu() {
+  const menu = document.getElementById('profile-dropdown');
+  const btn = document.getElementById('profile-btn');
+  const willShow = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden');
+  btn.setAttribute('aria-expanded', String(willShow));
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('profile-dropdown');
+  const btn = document.getElementById('profile-btn');
+  if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+    menu.classList.add('hidden');
+  }
+});
+
+function initials(name) {
+  return name.split(' ').filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
+}
+
+function renderProfiles() {
+  const current = currentProfile();
+  document.getElementById('active-profile-name').innerText = current.name;
+  document.getElementById('active-avatar').innerText = initials(current.name);
+
+  document.getElementById('profile-list').innerHTML = appState.profiles.map(p => `
+    <button onclick="setActiveProfile('${p.id}')" class="w-full text-left px-3 py-2.5 text-sm rounded-xl flex items-center justify-between ${p.id === current.id ? 'bg-brand-soft/50 text-brand font-medium' : 'text-ink hover:bg-bg'}">
+      <span>${p.name} ${p.relationLabel || ''}</span>
+      ${p.id === current.id ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}
+    </button>
+  `).join('');
+
+  safeIcons();
+  renderDashboard();
+  renderHandoff();
+  renderDocuments();
+}
+
+function setActiveProfile(id) {
+  appState.activeProfileId = id;
+  saveState();
+  document.getElementById('profile-dropdown').classList.add('hidden');
+  renderProfiles();
+}
+
+function renderDashboard() {
+  const p = currentProfile();
+  document.getElementById('dash-patient-name').innerText = `${p.name} ${p.relationLabel || ''}`.trim();
+  document.getElementById('dash-patient-sub').innerText = `Born ${p.dob} · ${p.age} years old`;
+  document.getElementById('dash-blood-type').innerText = p.bloodType;
+  document.getElementById('dash-allergies').innerHTML = p.allergies.map(a =>
+    `<span class="px-2 py-1 rounded-lg bg-surface border border-amber/30 text-amber text-xs font-medium">${a}</span>`).join('') || '<span class="text-xs text-muted">None recorded</span>';
+  document.getElementById('dash-conditions').innerHTML = p.conditions.map(c =>
+    `<span class="px-2 py-1 rounded-lg bg-surface border border-brand/30 text-brand text-xs font-medium">${c}</span>`).join('') || '<span class="text-xs text-muted">None recorded</span>';
+  
+  document.getElementById('dash-contact-name').innerText = p.emergencyContact.name;
+  document.getElementById('dash-contact-phone').innerText = p.emergencyContact.phone;
+  document.getElementById('dash-contact-phone').href = `tel:${p.emergencyContact.phone.replace(/[^\d+]/g,'')}`;
+  document.getElementById('dash-active-meds').innerText = p.activeMeds;
+  document.getElementById('legal-code-status').innerText = p.codeStatus;
+  document.getElementById('legal-mpoa-name').innerText = p.mpoa;
+
+  const sosBtn = document.getElementById('sos-call-btn');
+  const sosLabel = document.getElementById('sos-call-label');
+  if (sosBtn && sosLabel) {
+    sosBtn.href = `tel:${p.emergencyContact.phone.replace(/[^\d+]/g,'')}`;
+    sosLabel.innerText = `Call ${p.emergencyContact.name.replace(/\s*\(.*?\)\s*/,'')} now`;
+  }
+}
+
+const categoryIcon = {
+  'Prescription': 'pill',
+  'Lab report': 'flask-conical',
+  'Imaging / scan': 'scan',
+  'Discharge summary': 'file-text'
+};
+
+let pendingUnlockDocId = null;
+
+function togglePinInput(isPrivate) {
+  document.getElementById('pin-field-wrapper').classList.toggle('hidden', !isPrivate);
+}
+
+function renderDocuments() {
+  const list = document.getElementById('documents-list');
+  const activeId = appState.activeProfileId;
+  
+  const profileDocs = (appState.documents || []).filter(d => !d.profileId || d.profileId === activeId);
+
+  if (!profileDocs.length) {
+    list.innerHTML = `<div class="bg-surface border border-dashed border-border rounded-2xl p-8 text-center text-sm text-muted">No documents uploaded for this profile yet. Add a prescription, lab result, or scan to get started.</div>`;
+    return;
+  }
+  list.innerHTML = profileDocs.map(d => `
+    <div class="reveal in-view card-hover bg-surface border border-border rounded-2xl p-4 flex items-center gap-4">
+      <div class="w-10 h-10 rounded-xl ${d.isPrivate ? 'bg-amber-soft text-amber' : 'bg-brand-soft text-brand'} flex items-center justify-center shrink-0">
+        <i data-lucide="${d.isPrivate ? 'lock' : (categoryIcon[d.category] || 'file')}" class="w-5 h-5"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-ink text-sm truncate flex items-center gap-2">
+          ${d.title}
+          ${d.isPrivate ? '<span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-soft border border-amber/30 text-amber">Private</span>' : ''}
+        </div>
+        <div class="text-xs text-muted">${d.category} · ${d.doctor} · ${d.date}${d.fileData ? '' : ' · No file attached'}</div>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        ${d.fileData ? `<button onclick="promptDocView('${d.id}')" class="px-3 py-1.5 text-sm text-brand hover:bg-brand-soft rounded-lg font-medium">View</button>` : ''}
+        <button onclick="deleteDocument('${d.id}')" aria-label="Delete ${d.title}" class="p-1.5 text-muted hover:text-urgent hover:bg-urgent-soft/40 rounded-lg">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+  safeIcons();
+}
+
+function promptDocView(id) {
+  const d = appState.documents.find(doc => doc.id === id);
+  if (!d) return;
+
+  if (d.isPrivate && d.pin) {
+    pendingUnlockDocId = id;
+    document.getElementById('unlock-pin-input').value = '';
+    document.getElementById('unlock-error').classList.add('hidden');
+    openModal('modal-unlock-doc');
+  } else {
+    viewDocument(id);
+  }
+}
+
+function verifyDocUnlock(e) {
+  e.preventDefault();
+  const enteredPin = document.getElementById('unlock-pin-input').value;
+  const d = appState.documents.find(doc => doc.id === pendingUnlockDocId);
+
+  if (d && d.pin === enteredPin) {
+    closeModal('modal-unlock-doc');
+    viewDocument(pendingUnlockDocId);
+    pendingUnlockDocId = null;
+  } else {
+    document.getElementById('unlock-error').classList.remove('hidden');
+  }
+}
+
+function viewDocument(id) {
+  const d = appState.documents.find(doc => doc.id === id);
+  if (!d || !d.fileData) return;
+  document.getElementById('view-doc-title').innerText = d.title;
+  const body = document.getElementById('view-doc-body');
+  if (d.fileType === 'application/pdf') {
+    body.innerHTML = `<iframe src="${d.fileData}" class="w-full h-[65vh] rounded-xl border border-border" title="${d.title}"></iframe>`;
+  } else {
+    body.innerHTML = `<img src="${d.fileData}" alt="${d.title}" class="max-w-full max-h-[65vh] object-contain rounded-xl">`;
+  }
+  openModal('modal-view-doc');
+}
+
+function deleteDocument(id) {
+  appState.documents = appState.documents.filter(d => d.id !== id);
+  saveState();
+  renderDocuments();
+}
+
+function renderCaregivers() {
+  const list = document.getElementById('caregivers-list');
+  list.innerHTML = appState.caregivers.map(c => `
+    <div class="reveal in-view card-hover bg-surface border border-border rounded-2xl p-4 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-full bg-brand-soft text-brand font-semibold flex items-center justify-center shrink-0 text-sm">${c.avatar}</div>
+        <div class="min-w-0">
+          <div class="font-medium text-ink text-sm truncate">${c.name}</div>
+          <div class="text-xs text-muted truncate">${c.relation}</div>
+        </div>
+      </div>
+      <span class="text-xs bg-brand-soft text-brand px-2.5 py-1 rounded-full shrink-0 border border-brand/20">${c.role}</span>
+    </div>
+  `).join('');
+}
+
+function renderHandoff() {
+  const p = currentProfile();
+  document.getElementById('handoff-name').innerText = `${p.name} ${p.relationLabel || ''}`.trim();
+  document.getElementById('handoff-sub').innerText = `Born ${p.dob}`;
+  document.getElementById('handoff-date').innerText = new Date().toLocaleDateString();
+  document.getElementById('handoff-meds').innerText = p.activeMeds;
+  document.getElementById('handoff-allergies').innerText = p.allergies.join(', ') || 'None recorded';
+  document.getElementById('handoff-contact').innerText = `${p.emergencyContact.name}, ${p.emergencyContact.phone}`;
+}
+
+function exportFhirJson() {
+  const p = currentProfile();
+  const bundle = {
+    resourceType: "Bundle",
+    type: "document",
+    entry: [
+      { resource: { resourceType: "Patient", name: [{ text: p.name }], birthDate: p.dob } },
+      { resource: { resourceType: "AllergyIntolerance", patient: p.name, code: { text: p.allergies.join(', ') } } },
+      { resource: { resourceType: "Condition", patient: p.name, code: { text: p.conditions.join(', ') } } },
+      { resource: { resourceType: "MedicationStatement", patient: p.name, text: p.activeMeds } }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${p.name.replace(/\s+/g,'_')}_health_record.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function openERModal() {
+  const p = currentProfile();
+  document.getElementById('modal-er-name').innerText = `${p.name} ${p.relationLabel || ''}`.trim();
+  document.getElementById('modal-er-blood').innerText = p.bloodType;
+  document.getElementById('modal-er-allergy').innerText = p.allergies.join(', ') || 'None recorded';
+  document.getElementById('modal-er-contact').innerText = p.emergencyContact.name;
+  document.getElementById('modal-er-phone').href = `tel:${p.emergencyContact.phone.replace(/[^\d+]/g,'')}`;
+
+  // Make modal visible first so the QR container has actual dimensions in the DOM
+  openModal('modal-er');
+
+  const holder = document.getElementById('er-qr-holder');
+  holder.innerHTML = '';
+
+  const payload = [
+    `Name: ${p.name}`,
+    `Blood: ${p.bloodType}`,
+    `Allergies: ${p.allergies.join(', ') || 'None'}`,
+    `ICE: ${p.emergencyContact.name} ${p.emergencyContact.phone}`
+  ].join('\n');
+
+  try {
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(holder, { 
+        text: payload, 
+        width: 160, 
+        height: 160,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } else {
+      throw new Error("QRCode library not loaded");
+    }
+  } catch (e) {
+    console.warn('QR library error, using fallback API:', e);
+    const encoded = encodeURIComponent(payload);
+    holder.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encoded}&bgcolor=ffffff&color=000000" alt="Emergency QR Code" class="w-40 h-40 block rounded-lg">`;
+  }
+}
+
+function openModal(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function closeModal(id) {
+  document.getElementById(id)?.classList.add('hidden');
+  if (id === 'modal-upload') resetUploadForm();
+}
+document.querySelectorAll('[id^="modal-"]').forEach(m => {
+  m.addEventListener('click', (e) => { if (e.target === m) closeModal(m.id); });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.querySelectorAll('[id^="modal-"]:not(.hidden)').forEach(m => closeModal(m.id));
+});
+
+function handleAddProfile(e) {
+  e.preventDefault();
+  const name = document.getElementById('prof-name').value;
+  const blood = document.getElementById('prof-blood').value;
+  const allergies = document.getElementById('prof-allergies').value.split(',').map(s => s.trim()).filter(Boolean);
+  const contactName = document.getElementById('prof-contact-name').value;
+  const contactPhone = document.getElementById('prof-contact-phone').value;
+
+  const newId = 'p-' + Date.now();
+  appState.profiles.push({
+    id: newId, 
+    name, 
+    relationLabel: '', 
+    dob: 'Not set', 
+    age: '—',
+    bloodType: blood, 
+    allergies, 
+    conditions: [], 
+    activeMeds: 'None recorded',
+    codeStatus: 'Not set', 
+    mpoa: 'Not set',
+    emergencyContact: { 
+      name: contactName, 
+      phone: contactPhone 
+    }
+  });
+
+  appState.activeProfileId = newId;
+  saveState();
+  closeModal('modal-profile');
+  e.target.reset();
+  renderProfiles();
+}
+
+function openEditContactModal() {
+  const p = currentProfile();
+  document.getElementById('edit-contact-name').value = p.emergencyContact.name;
+  document.getElementById('edit-contact-phone').value = p.emergencyContact.phone;
+  openModal('modal-contact-edit');
+}
+
+function handleEditContact(e) {
+  e.preventDefault();
+  const p = currentProfile();
+  p.emergencyContact.name = document.getElementById('edit-contact-name').value;
+  p.emergencyContact.phone = document.getElementById('edit-contact-phone').value;
+
+  saveState();
+  closeModal('modal-contact-edit');
+  renderDashboard();
+  renderHandoff();
+}
+
+function handleAddCaregiver(e) {
+  e.preventDefault();
+  const name = document.getElementById('cg-name').value;
+  const relation = document.getElementById('cg-relation').value;
+  const role = document.getElementById('cg-role').value;
+  appState.caregivers.push({ id: 'c-' + Date.now(), name, relation, role, avatar: initials(name) });
+  saveState();
+  closeModal('modal-add-caregiver');
+  e.target.reset();
+  renderCaregivers();
+}
+
+let pendingFile = null;
+
+function handleFileChosen(e) {
+  const file = e.target.files[0];
+  const label = document.getElementById('doc-file-label-text');
+  const errorEl = document.getElementById('doc-file-error');
+  errorEl.classList.add('hidden');
+  pendingFile = null;
+
+  if (!file) { label.innerText = 'Choose a photo or PDF of the document'; return; }
+
+  const maxBytes = 4 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    errorEl.innerText = 'That file is too large (max 4MB).';
+    errorEl.classList.remove('hidden');
+    e.target.value = '';
+    label.innerText = 'Choose a photo or PDF of the document';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingFile = { dataUrl: reader.result, type: file.type, name: file.name };
+    label.innerText = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetUploadForm() {
+  pendingFile = null;
+  document.getElementById('upload-form-el')?.reset();
+  document.getElementById('doc-file-label-text').innerText = 'Choose a photo or PDF of the document';
+  document.getElementById('doc-file-error').classList.add('hidden');
+  document.getElementById('pin-field-wrapper').classList.add('hidden');
+}
+
+function handleUpload(e) {
+  e.preventDefault();
+  const title = document.getElementById('doc-title').value;
+  const category = document.getElementById('doc-category').value;
+  const doctor = document.getElementById('doc-doctor').value;
+  const isPrivate = document.getElementById('doc-private').checked;
+  const pin = document.getElementById('doc-pin').value;
+
+  appState.documents.unshift({
+    id: 'doc-' + Date.now(),
+    profileId: appState.activeProfileId,
+    title,
+    category,
+    doctor,
+    date: new Date().toISOString().slice(0, 10),
+    fileData: pendingFile ? pendingFile.dataUrl : null,
+    fileType: pendingFile ? pendingFile.type : null,
+    isPrivate: isPrivate,
+    pin: isPrivate ? pin : null
+  });
+
+  saveState();
+  closeModal('modal-upload');
+  resetUploadForm();
+  renderDocuments();
+}
+
+function handleEditDirectives(e) {
+  e.preventDefault();
+  const p = currentProfile();
+  p.codeStatus = document.getElementById('edit-code-status').value;
+  p.mpoa = document.getElementById('edit-mpoa').value;
+  saveState();
+  closeModal('modal-dnr-edit');
+  renderDashboard();
+  renderHandoff();
+}
+
+function createParticleText(canvas, options) {
+  const opts = Object.assign({
+    text: 'Text',
+    particleSize: 2,
+    density: 4,
+    color: '#E8EFEA',
+    highlightColor: '#10B981',
+    scatter: 180,
+    gatherDuration: 1600,
+    stagger: 420,
+    pointerRepel: 40,
+    repelRadius: 120,
+    idleDrift: 0.7,
+    trigger: 'hover',
+    fontSize: '4rem',
+    fontWeight: 800,
+    fontFamily: 'inherit',
+    glow: true
+  }, options || {});
+
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  let width = 0, height = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let gathered = opts.trigger === 'always';
+  let pointer = { x: -9999, y: -9999, active: false };
+  let rafId = null;
+  let destroyed = false;
+
+  function resolveFontSizePx() {
+    const container = canvas.parentElement || document.body;
+    const w = container.clientWidth || window.innerWidth;
+    const clampMatch = /clamp\(\s*([\d.]+)rem\s*,\s*([\d.]+)vw\s*,\s*([\d.]+)rem\s*\)/.exec(opts.fontSize);
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    if (clampMatch) {
+      const min = parseFloat(clampMatch[1]) * rootPx;
+      const max = parseFloat(clampMatch[3]) * rootPx;
+      const preferred = (parseFloat(clampMatch[2]) / 100) * w;
+      return Math.max(min, Math.min(max, preferred));
+    }
+    if (typeof opts.fontSize === 'number') return opts.fontSize;
+    if (opts.fontSize.endsWith('rem')) return parseFloat(opts.fontSize) * rootPx;
+    if (opts.fontSize.endsWith('px')) return parseFloat(opts.fontSize);
+    return 64;
+  }
+
+  function resolveFontFamily() {
+    if (!opts.fontFamily || opts.fontFamily === 'inherit') {
+      return getComputedStyle(document.body).fontFamily || 'sans-serif';
+    }
+    return opts.fontFamily;
+  }
+
+  function buildParticles() {
+    width = canvas.clientWidth;
+    height = canvas.clientHeight;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const fontPx = resolveFontSizePx();
+    const family = resolveFontFamily();
+
+    const off = document.createElement('canvas');
+    off.width = width;
+    off.height = height;
+    const octx = off.getContext('2d');
+    octx.fillStyle = '#fff';
+    octx.font = `${opts.fontWeight} ${fontPx}px ${family}`;
+    octx.textAlign = 'center';
+    octx.textBaseline = 'middle';
+    octx.fillText(opts.text, width / 2, height / 2);
+
+    const img = octx.getImageData(0, 0, width, height).data;
+    const step = Math.max(1, opts.density);
+    const pts = [];
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        const alpha = img[(y * width + x) * 4 + 3];
+        if (alpha > 120) pts.push({ x, y });
+      }
+    }
+
+    particles = pts.map((pt, i) => {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = opts.scatter * (0.5 + Math.random() * 0.5);
+      return {
+        tx: pt.x, ty: pt.y,
+        sx: pt.x + Math.cos(angle) * dist,
+        sy: pt.y + Math.sin(angle) * dist,
+        x: gathered ? pt.x : pt.x + Math.cos(angle) * dist,
+        y: gathered ? pt.y : pt.y + Math.sin(angle) * dist,
+        delay: (i / Math.max(1, pts.length)) * opts.stagger,
+        phase: Math.random() * Math.PI * 2,
+        transitionStart: null,
+        fromX: null, fromY: null
+      };
+    });
+  }
+
+  function setGathered(next) {
+    if (gathered === next) return;
+    gathered = next;
+    const now = performance.now();
+    particles.forEach(p => {
+      p.fromX = p.x;
+      p.fromY = p.y;
+      p.transitionStart = now + p.delay;
+    });
+  }
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function frame(now) {
+    if (destroyed) return;
+    ctx.clearRect(0, 0, width, height);
+
+    for (const p of particles) {
+      const goalX = gathered ? p.tx : p.sx;
+      const goalY = gathered ? p.ty : p.sy;
+
+      if (p.transitionStart !== null) {
+        const t = (now - p.transitionStart) / opts.gatherDuration;
+        if (t <= 0) {
+          p.x = p.fromX; p.y = p.fromY;
+        } else if (t >= 1) {
+          p.x = goalX; p.y = goalY;
+          p.transitionStart = null;
+        } else {
+          const e = easeOutCubic(t);
+          p.x = p.fromX + (goalX - p.fromX) * e;
+          p.y = p.fromY + (goalY - p.fromY) * e;
+        }
+      } else if (!gathered) {
+        p.x = goalX; p.y = goalY;
+      }
+
+      let drawX = p.x, drawY = p.y;
+      if (gathered && p.transitionStart === null) {
+        drawX += Math.sin(now / 900 + p.phase) * opts.idleDrift;
+        drawY += Math.cos(now / 700 + p.phase) * opts.idleDrift;
+      }
+
+      let colorMix = 0;
+      if (pointer.active) {
+        const dx = drawX - pointer.x, dy = drawY - pointer.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < opts.repelRadius && dist > 0.01) {
+          const force = (1 - dist / opts.repelRadius) * opts.pointerRepel;
+          drawX += (dx / dist) * force;
+          drawY += (dy / dist) * force;
+          colorMix = 1 - dist / opts.repelRadius;
+        }
+      }
+
+      ctx.beginPath();
+      ctx.fillStyle = colorMix > 0 ? opts.highlightColor : opts.color;
+      if (opts.glow) {
+        ctx.shadowColor = colorMix > 0 ? opts.highlightColor : 'rgba(255,255,255,0.4)';
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+      ctx.arc(drawX, drawY, opts.particleSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function onPointerMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = e.clientX - rect.left;
+    pointer.y = e.clientY - rect.top;
+    pointer.active = true;
+  }
+  function onPointerLeave() {
+    pointer.active = false;
+    if (opts.trigger === 'hover') setGathered(false);
+  }
+  function onPointerEnter() {
+    if (opts.trigger === 'hover') setGathered(true);
+  }
+
+  const container = canvas.parentElement;
+  container.addEventListener('mouseenter', onPointerEnter);
+  container.addEventListener('mouseleave', onPointerLeave);
+  container.addEventListener('mousemove', onPointerMove);
+
+  let resizeTimer = null;
+  function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { try { buildParticles(); } catch (e) {} }, 150);
+  }
+  window.addEventListener('resize', onResize);
+
+  buildParticles();
+  rafId = requestAnimationFrame(frame);
+}
+
+function initParticleHero() {
+  try {
+    const canvas = document.getElementById('particle-hero-canvas');
+    if (!canvas) return;
+    createParticleText(canvas, {
+      text: 'MedAnchor',
+      particleSize: 2,
+      density: 4,
+      color: '#E8EFEA',
+      highlightColor: '#10B981',
+      scatter: 180,
+      gatherDuration: 1600,
+      stagger: 420,
+      pointerRepel: 40,
+      repelRadius: 120,
+      idleDrift: 0.7,
+      trigger: 'hover',
+      fontSize: 'clamp(3rem, 10vw, 7rem)',
+      fontWeight: 800,
+      fontFamily: 'inherit',
+      glow: true
+    });
+  } catch (e) {
+    console.warn('Particle hero disabled:', e);
+  }
+}
+
+window.addEventListener('load', () => {
+  document.getElementById('edit-mpoa').value = currentProfile().mpoa;
+  renderProfiles();
+  renderCaregivers();
+  observeReveals();
+  initBackground3D();
+  initParticleHero();
+});
+</script>
+</body>
+</html>
