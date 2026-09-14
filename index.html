@@ -217,7 +217,10 @@
           <div class="flex flex-wrap gap-1.5 mt-1.5" id="dash-allergies"></div>
         </div>
         <div class="reveal card-hover bg-brand-soft/30 rounded-2xl border border-brand/30 p-4" style="transition-delay:0.12s">
-          <span class="text-xs text-brand font-medium">Ongoing conditions</span>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-brand font-medium">Ongoing conditions</span>
+            <button onclick="openEditHandoffModal()" class="text-xs text-brand hover:underline font-medium">Edit</button>
+          </div>
           <div class="flex flex-wrap gap-1.5 mt-1.5" id="dash-conditions"></div>
         </div>
         <div class="reveal card-hover bg-surface rounded-2xl border border-border p-4" style="transition-delay:0.18s">
@@ -235,7 +238,10 @@
           <h2 class="text-base font-semibold text-ink flex items-center gap-2">
             <i data-lucide="pill" class="w-4 h-4 text-brand"></i> Current medications
           </h2>
-          <button onclick="switchTab('documents')" class="text-sm text-brand hover:underline">View prescriptions</button>
+          <div class="flex items-center gap-3">
+            <button onclick="openEditHandoffModal()" class="text-sm text-brand hover:underline">Edit</button>
+            <button onclick="switchTab('documents')" class="text-sm text-muted hover:text-ink">View prescriptions</button>
+          </div>
         </div>
         <p class="text-sm text-muted leading-relaxed" id="dash-active-meds">Metformin 500mg, twice daily · Lisinopril 10mg, once daily in the morning · Aspirin 81mg, once daily</p>
       </div>
@@ -322,7 +328,10 @@
           <h1 class="text-xl font-semibold text-ink">Clinic handoff</h1>
           <p class="text-sm text-muted mt-0.5">A condensed clinical overview intended for rapid intake.</p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
+          <button onclick="openEditHandoffModal()" class="px-3.5 py-2.5 bg-surface hover:bg-border text-ink text-sm font-medium rounded-xl border border-border flex items-center gap-2">
+            <i data-lucide="edit-3" class="w-4 h-4"></i> Edit clinical info
+          </button>
           <button onclick="exportFhirJson()" class="px-3.5 py-2.5 bg-surface hover:bg-border text-ink text-sm font-medium rounded-xl border border-border flex items-center gap-2">
             <i data-lucide="download" class="w-4 h-4"></i> Export FHIR JSON
           </button>
@@ -412,6 +421,31 @@
           <i data-lucide="phone" class="w-4 h-4"></i> Call
         </a>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT CLINICAL INFO / HANDOFF -->
+  <div id="modal-edit-handoff" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+    <div class="bg-surface rounded-3xl w-full max-w-lg p-6 space-y-4 relative shadow-2xl border border-border">
+      <button onclick="closeModal('modal-edit-handoff')" aria-label="Close" class="absolute top-4 right-4 text-muted hover:text-ink p-1.5 rounded-lg hover:bg-border">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h2 class="text-lg font-semibold text-ink">Edit Clinical Information</h2>
+      <form onsubmit="handleSaveHandoff(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-handoff-problems">Problem List / Conditions (comma separated)</label>
+          <textarea id="edit-handoff-problems" rows="2" placeholder="e.g. Type 2 diabetes, Hypertension" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-handoff-meds">Current Medications</label>
+          <textarea id="edit-handoff-meds" rows="2" placeholder="e.g. Metformin 500mg, twice daily" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm text-ink mb-1" for="edit-handoff-labs">Recent Labs</label>
+          <input type="text" id="edit-handoff-labs" placeholder="e.g. HbA1c: 6.8% (Jan 2026)" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Save Changes</button>
+      </form>
     </div>
   </div>
 
@@ -682,13 +716,22 @@ const INITIAL_APP_STATE = {
   ]
 };
 
+// Storage key bumped to v3 to guarantee cached browser storage migrates cleanly
+const STORAGE_KEY = 'MEDANCHOR_STATE_V3';
+
 let appState;
 try {
-  appState = JSON.parse(localStorage.getItem('MEDANCHOR_STATE')) || INITIAL_APP_STATE;
+  appState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || INITIAL_APP_STATE;
 } catch (e) {
   appState = INITIAL_APP_STATE;
 }
-function saveState() { try { localStorage.setItem('MEDANCHOR_STATE', JSON.stringify(appState)); } catch (e) { console.warn('Could not save:', e); } }
+function saveState() { 
+  try { 
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); 
+  } catch (e) { 
+    console.warn('Could not save:', e); 
+  } 
+}
 function currentProfile() { return appState.profiles.find(p => p.id === appState.activeProfileId) || appState.profiles[0]; }
 
 function safeIcons() { try { lucide.createIcons(); } catch (e) { console.warn('Icon render skipped:', e); } }
@@ -847,13 +890,15 @@ function renderDashboard() {
   document.getElementById('dash-blood-type').innerText = p.bloodType;
   document.getElementById('dash-allergies').innerHTML = p.allergies.map(a =>
     `<span class="px-2 py-1 rounded-lg bg-surface border border-amber/30 text-amber text-xs font-medium">${a}</span>`).join('') || '<span class="text-xs text-muted">None recorded</span>';
-  document.getElementById('dash-conditions').innerHTML = p.conditions.map(c =>
+  
+  const displayConditions = (p.conditions && p.conditions.length) ? p.conditions : (p.problems || []);
+  document.getElementById('dash-conditions').innerHTML = displayConditions.map(c =>
     `<span class="px-2 py-1 rounded-lg bg-surface border border-brand/30 text-brand text-xs font-medium">${c}</span>`).join('') || '<span class="text-xs text-muted">None recorded</span>';
   
   document.getElementById('dash-contact-name').innerText = p.emergencyContact.name;
   document.getElementById('dash-contact-phone').innerText = p.emergencyContact.phone;
   document.getElementById('dash-contact-phone').href = `tel:${p.emergencyContact.phone.replace(/[^\d+]/g,'')}`;
-  document.getElementById('dash-active-meds').innerText = p.activeMeds;
+  document.getElementById('dash-active-meds').innerText = p.activeMeds || 'None recorded';
   document.getElementById('legal-code-status').innerText = p.codeStatus;
   document.getElementById('legal-mpoa-name').innerText = p.mpoa;
 
@@ -979,7 +1024,7 @@ function renderHandoff() {
   document.getElementById('handoff-name').innerText = `${p.name} ${p.relationLabel || ''}`.trim();
   document.getElementById('handoff-sub').innerText = `Born ${p.dob}`;
   document.getElementById('handoff-date').innerText = new Date().toLocaleDateString();
-  document.getElementById('handoff-meds').innerText = p.activeMeds;
+  document.getElementById('handoff-meds').innerText = p.activeMeds || 'None recorded';
   document.getElementById('handoff-allergies').innerText = p.allergies.join(', ') || 'None recorded';
   document.getElementById('handoff-contact').innerText = `${p.emergencyContact.name}, ${p.emergencyContact.phone}`;
 
@@ -997,6 +1042,32 @@ function renderHandoff() {
   if (labsEl) {
     labsEl.innerText = p.recentLabs || 'No recent lab results on file';
   }
+}
+
+function openEditHandoffModal() {
+  const p = currentProfile();
+  const currentProblems = (p.problems && p.problems.length) ? p.problems : (p.conditions || []);
+  document.getElementById('edit-handoff-problems').value = currentProblems.join(', ');
+  document.getElementById('edit-handoff-meds').value = p.activeMeds || '';
+  document.getElementById('edit-handoff-labs').value = p.recentLabs || '';
+  openModal('modal-edit-handoff');
+}
+
+function handleSaveHandoff(e) {
+  e.preventDefault();
+  const p = currentProfile();
+  const rawProblems = document.getElementById('edit-handoff-problems').value;
+  const parsedProblems = rawProblems.split(',').map(s => s.trim()).filter(Boolean);
+  
+  p.problems = parsedProblems;
+  p.conditions = parsedProblems; // Syncs ongoing conditions on Overview tab
+  p.activeMeds = document.getElementById('edit-handoff-meds').value;
+  p.recentLabs = document.getElementById('edit-handoff-labs').value;
+
+  saveState();
+  closeModal('modal-edit-handoff');
+  renderHandoff();
+  renderDashboard();
 }
 
 function exportFhirJson() {
