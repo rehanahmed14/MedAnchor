@@ -344,28 +344,24 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
             <h3 class="text-sm font-semibold text-ink mb-2">Problem list</h3>
-            <ul class="text-sm text-muted space-y-1 list-disc pl-4" id="handoff-problems">
-              <li>Type 2 diabetes — most recent HbA1c 6.8%</li>
-              <li>Essential hypertension — controlled on lisinopril</li>
-            </ul>
+            <ul class="text-sm text-muted space-y-1 list-disc pl-4" id="handoff-problems"></ul>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-ink mb-2">Current medications</h3>
-            <p class="text-sm text-muted" id="handoff-meds">Metformin 500mg twice daily · Lisinopril 10mg once daily · Aspirin 81mg once daily</p>
-            <p class="text-xs text-muted/70 mt-2">Metformin increased from 250mg in August 2025 after a rise in blood sugar.</p>
+            <p class="text-sm text-muted" id="handoff-meds"></p>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-ink mb-2">Allergies</h3>
-            <p class="text-sm text-muted" id="handoff-allergies">Penicillin (anaphylaxis), peanuts</p>
+            <p class="text-sm text-muted" id="handoff-allergies"></p>
           </div>
           <div>
             <h3 class="text-sm font-semibold text-ink mb-2">Recent labs</h3>
-            <p class="text-sm text-muted">HbA1c: 7.4% (Jul 2024) → 7.1% (Nov 2024) → 6.8% (Jan 2026)</p>
+            <p class="text-sm text-muted" id="handoff-labs"></p>
           </div>
         </div>
 
         <div class="border-t border-border pt-4 text-sm text-muted">
-          Emergency contact: <span class="text-ink font-medium" id="handoff-contact">Mark Davis (Son), +1 (555) 019-2831</span>
+          Emergency contact: <span class="text-ink font-medium" id="handoff-contact"></span>
         </div>
       </div>
     </section>
@@ -456,7 +452,6 @@
           </div>
         </div>
 
-        <!-- Privacy lock option -->
         <div class="p-3 bg-bg border border-border rounded-xl space-y-2">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="doc-private" class="rounded accent-emerald-500 w-4 h-4" onchange="togglePinInput(this.checked)">
@@ -536,6 +531,16 @@
           </div>
         </div>
 
+        <div>
+          <label class="block text-sm text-ink mb-1" for="prof-conditions">Conditions / Problem list</label>
+          <input type="text" id="prof-conditions" placeholder="e.g. Asthma, High blood pressure" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+
+        <div>
+          <label class="block text-sm text-ink mb-1" for="prof-labs">Recent Labs</label>
+          <input type="text" id="prof-labs" placeholder="e.g. Normal blood work (Jan 2026)" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
+        </div>
+
         <div class="pt-2 border-t border-border">
           <label class="block text-sm font-medium text-ink mb-2">Emergency Contact</label>
           <div class="space-y-2.5">
@@ -591,7 +596,7 @@
           <select id="cg-role" class="w-full px-3.5 py-2.5 bg-bg border border-border rounded-xl text-sm text-ink focus:border-brand outline-none">
             <option value="Full access">Full access — can view and edit everything</option>
             <option value="Medical view only">Medical records — view only</option>
-            <option value="Emergency only">Emergency info only</option>
+            <option value="Emergency info only">Emergency info only</option>
           </select>
         </div>
         <button type="submit" class="w-full py-2.5 bg-brand hover:bg-brand-dark text-bg font-semibold text-sm rounded-xl">Add to care circle</button>
@@ -628,19 +633,41 @@ const INITIAL_APP_STATE = {
   activeProfileId: 'p1',
   profiles: [
     {
-      id: 'p1', name: 'Eleanor Davis', relationLabel: '', dob: '14 May 1968', age: 58,
-      bloodType: 'O positive', allergies: ['Penicillin (anaphylaxis)', 'Peanuts'],
+      id: 'p1', 
+      name: 'Eleanor Davis', 
+      relationLabel: '', 
+      dob: '14 May 1968', 
+      age: 58,
+      bloodType: 'O positive', 
+      allergies: ['Penicillin (anaphylaxis)', 'Peanuts'],
       conditions: ['Type 2 diabetes', 'Hypertension'],
+      problems: [
+        'Type 2 diabetes — most recent HbA1c 6.8%',
+        'Essential hypertension — controlled on lisinopril'
+      ],
+      recentLabs: 'HbA1c: 7.4% (Jul 2024) → 7.1% (Nov 2024) → 6.8% (Jan 2026)',
       activeMeds: 'Metformin 500mg, twice daily · Lisinopril 10mg, once daily in the morning · Aspirin 81mg, once daily',
-      codeStatus: 'Full code — resuscitate', mpoa: 'Mark Davis (Son)',
+      codeStatus: 'Full code — resuscitate', 
+      mpoa: 'Mark Davis (Son)',
       emergencyContact: { name: 'Mark Davis (Son)', phone: '+1 (555) 019-2831' }
     },
     {
-      id: 'p2', name: 'Arthur Davis', relationLabel: '(Father)', dob: '3 Feb 1941', age: 85,
-      bloodType: 'A positive', allergies: ['Sulfa antibiotics'],
+      id: 'p2', 
+      name: 'Arthur Davis', 
+      relationLabel: '(Father)', 
+      dob: '3 Feb 1941', 
+      age: 85,
+      bloodType: 'A positive', 
+      allergies: ['Sulfa antibiotics'],
       conditions: ['Congestive heart failure', 'Pacemaker'],
+      problems: [
+        'Congestive Heart Failure (NYHA Class II)',
+        'Dual-chamber pacemaker implanted 2021'
+      ],
+      recentLabs: 'BNP: 420 pg/mL (Nov 2025) · eGFR: 58 mL/min (Stable)',
       activeMeds: 'Furosemide 40mg, once daily · Carvedilol 12.5mg, twice daily',
-      codeStatus: 'Do not resuscitate (DNR)', mpoa: 'Eleanor Davis (Daughter)',
+      codeStatus: 'Do not resuscitate (DNR)', 
+      mpoa: 'Eleanor Davis (Daughter)',
       emergencyContact: { name: 'Eleanor Davis (Daughter)', phone: '+1 (555) 012-4411' }
     }
   ],
@@ -955,6 +982,21 @@ function renderHandoff() {
   document.getElementById('handoff-meds').innerText = p.activeMeds;
   document.getElementById('handoff-allergies').innerText = p.allergies.join(', ') || 'None recorded';
   document.getElementById('handoff-contact').innerText = `${p.emergencyContact.name}, ${p.emergencyContact.phone}`;
+
+  // Dynamically populate problem list per profile
+  const problems = (p.problems && p.problems.length) ? p.problems : (p.conditions || []);
+  const problemsListEl = document.getElementById('handoff-problems');
+  if (problems.length) {
+    problemsListEl.innerHTML = problems.map(prob => `<li>${prob}</li>`).join('');
+  } else {
+    problemsListEl.innerHTML = '<li>No active clinical problems recorded</li>';
+  }
+
+  // Dynamically populate recent labs per profile
+  const labsEl = document.getElementById('handoff-labs');
+  if (labsEl) {
+    labsEl.innerText = p.recentLabs || 'No recent lab results on file';
+  }
 }
 
 function exportFhirJson() {
@@ -965,7 +1007,7 @@ function exportFhirJson() {
     entry: [
       { resource: { resourceType: "Patient", name: [{ text: p.name }], birthDate: p.dob } },
       { resource: { resourceType: "AllergyIntolerance", patient: p.name, code: { text: p.allergies.join(', ') } } },
-      { resource: { resourceType: "Condition", patient: p.name, code: { text: p.conditions.join(', ') } } },
+      { resource: { resourceType: "Condition", patient: p.name, code: { text: (p.problems || p.conditions).join(', ') } } },
       { resource: { resourceType: "MedicationStatement", patient: p.name, text: p.activeMeds } }
     ]
   };
@@ -991,11 +1033,17 @@ function openERModal() {
   const holder = document.getElementById('er-qr-holder');
   holder.innerHTML = '';
 
+  const cleanPhone = (p.emergencyContact.phone || '').replace(/[^\d+]/g, '');
+  const allergyList = p.allergies.length ? p.allergies.join(', ') : 'None';
+
   const payload = [
-    `Name: ${p.name}`,
-    `Blood: ${p.bloodType}`,
-    `Allergies: ${p.allergies.join(', ') || 'None'}`,
-    `ICE: ${p.emergencyContact.name} ${p.emergencyContact.phone}`
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `N:;${p.name};;;`,
+    `FN:${p.name} (ICE Emergency)`,
+    `NOTE:EMERGENCY MEDICAL INFO\\nBlood Type: ${p.bloodType}\\nAllergies: ${allergyList}\\nContact: ${p.emergencyContact.name}`,
+    `TEL;TYPE=CELL,VOICE:${cleanPhone}`,
+    'END:VCARD'
   ].join('\n');
 
   try {
@@ -1036,6 +1084,8 @@ function handleAddProfile(e) {
   const rawDob = document.getElementById('prof-dob').value;
   const blood = document.getElementById('prof-blood').value;
   const allergies = document.getElementById('prof-allergies').value.split(',').map(s => s.trim()).filter(Boolean);
+  const conditions = document.getElementById('prof-conditions').value.split(',').map(s => s.trim()).filter(Boolean);
+  const labs = document.getElementById('prof-labs').value;
   const contactName = document.getElementById('prof-contact-name').value;
   const contactPhone = document.getElementById('prof-contact-phone').value;
 
@@ -1062,7 +1112,9 @@ function handleAddProfile(e) {
     age: age,
     bloodType: blood, 
     allergies, 
-    conditions: [], 
+    conditions: conditions,
+    problems: conditions.length ? conditions : ['No active clinical problems recorded'],
+    recentLabs: labs || 'No recent lab results on file',
     activeMeds: 'None recorded',
     codeStatus: 'Full code — resuscitate', 
     mpoa: 'Not set',
